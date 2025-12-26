@@ -164,7 +164,8 @@ export function useAppViewModel() {
                     status_id: '*',
                     updated_on: `>=${oneMonthAgo}`,
                     sort: 'updated_on:desc',
-                    include: 'journals,attachments,watchers',
+                    // Note: Don't include journals,attachments,watchers here - too slow for list refresh
+                    // These will be fetched on-demand when viewing issue details
                     limit,
                     offset
                 };
@@ -221,15 +222,15 @@ export function useAppViewModel() {
             });
 
             // Fetch followed issues using watcher_id filter (much faster than individual requests)
-            const user = await service.fetchCurrentUser();
-            if (user) {
+            // Use cached currentUser instead of fetching again
+            if (currentUser) {
                 let followedIds = new Set<number>();
                 let followedIssuesList: Issue[] = [];
                 let offset = 0;
                 const limit = 100;
                 while (true) {
                     const { issues, total_count } = await service.fetchIssues({
-                        watcher_id: user.id,
+                        watcher_id: currentUser.id,
                         status_id: '*',
                         limit,
                         offset
@@ -276,7 +277,7 @@ export function useAppViewModel() {
         } finally {
             setIsBackgroundRefreshing(false);
         }
-    }, [service]); // Badge updates handled by reactive useEffect
+    }, [service, currentUser]); // Badge updates handled by reactive useEffect
 
     // Fetch issues for a specific version (for Others section)
     const fetchVersionIssues = useCallback(async (versionId: number) => {
@@ -574,13 +575,25 @@ export function useAppViewModel() {
         if (!service) return;
         setIsLoading(true);
         try {
-            await service.createIssue({
+            const newIssue = await service.createIssue({
                 project_id: projectId,
                 subject,
                 fixed_version_id: versionId,
                 assigned_to_id: assignedToId
             });
-            await refreshIssues();
+            // Directly add the new issue to the list instead of refreshing all issues
+            // This provides instant feedback to the user
+            setAllIssues(prev => [newIssue, ...prev]);
+            // Also update localStorage cache
+            try {
+                const cached = localStorage.getItem('cachedIssues');
+                if (cached) {
+                    const cachedIssues = JSON.parse(cached);
+                    localStorage.setItem('cachedIssues', JSON.stringify([newIssue, ...cachedIssues]));
+                }
+            } catch (e) {
+                console.warn('Failed to update cache:', e);
+            }
         } catch (e: any) {
             setErrorMessage(e.message);
         } finally {

@@ -130,12 +130,10 @@ body {
   display: flex;
   flex-direction: column;
   resize: horizontal;
-  overflow: auto;
+  overflow: hidden;
   min-width: 300px;
   max-width: 800px;
-  /* Performance: isolate repaints within this container */
-  contain: layout style paint;
-  transform: translateZ(0);
+  position: relative;
 }
 
 .issue-detail-pane {
@@ -177,15 +175,13 @@ body {
 }
 
 .transparency-enabled .add-task-bar {
-  background: rgba(20, 20, 20, 0.25) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(15, 15, 15, 0.92) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .light-theme.transparency-enabled .add-task-bar {
-  background: rgba(255, 255, 255, 0.25) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 /* Sidebar Styling */
@@ -383,11 +379,14 @@ body {
 
 .add-task-bar {
   padding: 15px;
-  background: var(--list-bg);
-  border-top: 1px solid var(--border-color);
+  background: var(--editor-bg);
+  border-top: 1px solid var(--editor-border);
   display: flex;
   align-items: center;
   gap: 10px;
+  z-index: 100;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 /* Scrollbar */

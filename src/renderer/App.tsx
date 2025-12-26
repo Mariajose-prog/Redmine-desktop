@@ -275,13 +275,32 @@ const App: React.FC = () => {
     const remainingWidth = windowWidth - sidebarWidth - 8; // 8px for resize handles
     const listWidth = Math.max(300, Math.min(800, Math.round(remainingWidth * listRatio)));
 
-    // Detect version switch for scroll behavior
+    // Track previous groupedIssues to detect reordering
+    const prevGroupedIssuesRef = useRef(vm.groupedIssues);
+
+    // Detect version switch or issue reordering for scroll behavior
     useEffect(() => {
         if (prevVersionIdRef.current !== vm.selectedVersionId) {
             shouldScrollToSelectedRef.current = true;
             prevVersionIdRef.current = vm.selectedVersionId;
         }
-    }, [vm.selectedVersionId]);
+        // Also scroll when issue list is reordered (e.g., status change)
+        if (prevGroupedIssuesRef.current !== vm.groupedIssues && selectedIssueId) {
+            // Check if the selected issue moved to a different group
+            const findGroup = (issues: typeof vm.groupedIssues, id: number) => {
+                for (const key of issues.sortedKeys) {
+                    if (issues.groups[key]?.some(i => i.id === id)) return key;
+                }
+                return null;
+            };
+            const prevGroup = findGroup(prevGroupedIssuesRef.current, selectedIssueId);
+            const newGroup = findGroup(vm.groupedIssues, selectedIssueId);
+            if (prevGroup && newGroup && prevGroup !== newGroup) {
+                shouldScrollToSelectedRef.current = true;
+            }
+            prevGroupedIssuesRef.current = vm.groupedIssues;
+        }
+    }, [vm.selectedVersionId, vm.groupedIssues, selectedIssueId]);
 
     useEffect(() => {
         if (selectedIssueId === null) {
@@ -332,7 +351,7 @@ const App: React.FC = () => {
         return () => {
             if (rafId) cancelAnimationFrame(rafId);
         };
-    }, [selectedIssueId, collapsedGroups, windowWidth, listWidth, sidebarWidth]); // Updated deps
+    }, [selectedIssueId, collapsedGroups, windowWidth, listWidth, sidebarWidth, deferredGroupedIssues]); // Updated deps - include deferredGroupedIssues to respond to list reordering
 
     // Track if sidebar indicator has been initialized
     const [sidebarIndicatorInitialized, setSidebarIndicatorInitialized] = useState(false);
@@ -632,7 +651,12 @@ const App: React.FC = () => {
         const keys = issues.sortedKeys;
         const allFiltered = keys.flatMap(k => issues.groups[k]);
 
-        if (allFiltered.length === 0) return;
+        // If no issues, clear selection and hide indicator
+        if (allFiltered.length === 0) {
+            setSelectedIssueId(null);
+            setIndicatorStyle({ opacity: 0 });
+            return;
+        }
 
         // If something is selected, check if it's still valid
         if (selectedIssueId) {
