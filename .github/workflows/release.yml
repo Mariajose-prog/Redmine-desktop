@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'  # 当 push v开头的 tag 时触发，例如 v1.0.11
 
+# 授权 workflow 写入权限
+permissions:
+  contents: write
+
 jobs:
   # 构建 macOS 版本 (同时构建 arm64 和 x64)
   build-macos:
