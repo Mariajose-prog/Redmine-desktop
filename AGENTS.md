@@ -36,6 +36,17 @@
 - **策略调整**: 考虑到浅色模式毛玻璃效果的局限性，决定在 **Light 模式下自动禁用透明效果**，保持稳定一致的纯色背景。
 - **工程化**: 完善 `.gitignore` 文件，过滤不必要的二进制与构建产物。
 
+### v1.0.10: 自动更新功能
+- **核心功能**: 基于 GitHub Releases 的自动更新系统，使用 `electron-updater` 实现。
+- **更新检查**: 应用启动后 3 秒自动检查更新（仅生产环境）。
+- **更新 UI**: 新增 `UpdaterModal` 组件，提供美观的更新界面：
+    - 显示当前版本和新版本信息
+    - 下载进度条（实时显示速度和进度）
+    - 支持手动检查、下载、安装更新
+    - 一键打开 GitHub Releases 页面
+- **集成入口**: 设置面板新增"检查更新"按钮。
+- **日志系统**: 使用 `electron-log` 记录更新过程。
+
 ## 关键技术细节 (供 Agent 参考)
 
 ### 1. 指示器同步逻辑
@@ -58,7 +69,14 @@ const sync = () => {
 透明模式依赖 `localStorage.getItem('enableTransparency')` 和 `isMac` 环境。
 CSS 类名控制：`.transparency-enabled` (仅在 Dark 模式有效)。
 
+### 4. 自动更新架构
+- **主进程模块**: `src/main/updater.ts` - 处理 GitHub Release 检查、下载、安装。
+- **Preload 桥接**: `src/main/preload.ts` - 暴露 `window.updater` API。
+- **渲染进程 UI**: `src/renderer/components/UpdaterModal.tsx` - 更新界面组件。
+- **配置**: `package.json` build.publish 配置 GitHub provider。
+
 ## 待办事项 / 未来优化
 - [ ] 增加更多自定义过滤条件。
 - [ ] 优化离线存储机制。
 - [ ] Windows 平台的 Acrylic/Mica 特效探索 (类似 macOS 的模糊效果)。
+

@@ -4,6 +4,7 @@ import { Issue, IssueJournal } from './models/redmine';
 import { format } from 'date-fns';
 import { AuthenticatedImage } from './components/AuthenticatedImage';
 import { RichEditor } from './components/RichEditor';
+import UpdaterModal from './components/UpdaterModal';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { marked } from 'marked';
@@ -234,6 +235,7 @@ const App: React.FC = () => {
     const [editingVersionId, setEditingVersionId] = useState<number | null>(null);
     const [editVersionName, setEditVersionName] = useState('');
     const [showSettings, setShowSettings] = useState(false);
+    const [showUpdaterModal, setShowUpdaterModal] = useState(false);
     const [newTaskSubject, setNewTaskSubject] = useState('');
 
     // Track which groups are collapsed in the issue list
@@ -1003,6 +1005,18 @@ const App: React.FC = () => {
                             <input type="checkbox" checked={vm.showBadge} onChange={e => vm.setShowBadge(e.target.checked)} style={{ width: 20, height: 20 }} />
                         </div>
                     </div>
+                    <div style={{ marginBottom: 20 }}>
+                        <h3 style={{ fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 15 }}>About</h3>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>检查应用更新</span>
+                            <button
+                                onClick={() => { setShowSettings(false); setShowUpdaterModal(true); }}
+                                style={{ padding: '8px 16px', background: 'var(--button-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
+                            >
+                                🚀 检查更新
+                            </button>
+                        </div>
+                    </div>
                     <div style={{ display: 'flex', gap: 10, marginTop: 30 }}>
                         <button
                             disabled={vm.isLoading}
@@ -1039,6 +1053,7 @@ const App: React.FC = () => {
             <div className="title-bar-drag-region" />
 
             {showSettings && <SettingsModal />}
+            <UpdaterModal isOpen={showUpdaterModal} onClose={() => setShowUpdaterModal(false)} isDark={!isLightTheme} />
 
             {/* New Version Dialog */}
             {newVersionProjectId !== null && (
