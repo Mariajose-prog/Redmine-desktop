@@ -236,6 +236,8 @@ const App: React.FC = () => {
     const [editVersionName, setEditVersionName] = useState('');
     const [showSettings, setShowSettings] = useState(false);
     const [showUpdaterModal, setShowUpdaterModal] = useState(false);
+    const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true);
+    const [autoUpdateInterval, setAutoUpdateInterval] = useState(24);
     const [newTaskSubject, setNewTaskSubject] = useState('');
 
     // Track which groups are collapsed in the issue list
@@ -271,6 +273,32 @@ const App: React.FC = () => {
         const handleResize = () => setWindowWidth(window.innerWidth);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // 加载自动更新设置
+    useEffect(() => {
+        const loadAutoUpdateSettings = async () => {
+            try {
+                const settings = await window.updater?.getAutoUpdateSettings();
+                if (settings) {
+                    setAutoUpdateEnabled(settings.enabled);
+                    setAutoUpdateInterval(settings.interval);
+                }
+            } catch (e) {
+                console.error('Failed to load auto update settings:', e);
+            }
+        };
+        loadAutoUpdateSettings();
+
+        // 监听后台静默更新通知
+        const unsubscribe = window.updater?.onUpdateAvailableSilent((info) => {
+            // 显示更新界面
+            setShowUpdaterModal(true);
+        });
+
+        return () => {
+            unsubscribe?.();
+        };
     }, []);
 
     // Calculate actual list width from ratio
@@ -1006,9 +1034,39 @@ const App: React.FC = () => {
                         </div>
                     </div>
                     <div style={{ marginBottom: 20 }}>
-                        <h3 style={{ fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 15 }}>About</h3>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>检查应用更新</span>
+                        <h3 style={{ fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 15 }}>自动更新</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '15px', alignItems: 'center', marginBottom: 10 }}>
+                            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>自动检测更新</span>
+                            <input
+                                type="checkbox"
+                                checked={autoUpdateEnabled}
+                                onChange={async (e) => {
+                                    const newValue = e.target.checked;
+                                    setAutoUpdateEnabled(newValue);
+                                    await window.updater?.setAutoUpdateSettings({ enabled: newValue });
+                                }}
+                                style={{ width: 20, height: 20 }}
+                            />
+                            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>检测频率</span>
+                            <select
+                                value={autoUpdateInterval}
+                                onChange={async (e) => {
+                                    const newValue = parseFloat(e.target.value);
+                                    setAutoUpdateInterval(newValue);
+                                    await window.updater?.setAutoUpdateSettings({ interval: newValue });
+                                }}
+                                style={{ padding: '8px', background: 'var(--input-bg)', border: '1px solid var(--input-border)', color: 'var(--text-primary)', borderRadius: 6 }}
+                            >
+                                <option value="0.0167">1分钟(测试)</option>
+                                <option value="1">每小时</option>
+                                <option value="6">每6小时</option>
+                                <option value="12">每12小时</option>
+                                <option value="24">每天</option>
+                                <option value="168">每周</option>
+                            </select>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 15 }}>
+                            <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>手动检查更新</span>
                             <button
                                 onClick={() => { setShowSettings(false); setShowUpdaterModal(true); }}
                                 style={{ padding: '8px 16px', background: 'var(--button-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
@@ -1041,6 +1099,7 @@ const App: React.FC = () => {
         return (
             <div className="light-theme" style={{ background: '#f5f5f7', height: '100vh', width: '100vw' }}>
                 <SettingsModal forceShow />
+                <UpdaterModal isOpen={showUpdaterModal} onClose={() => setShowUpdaterModal(false)} isDark={false} />
             </div>
         );
     }

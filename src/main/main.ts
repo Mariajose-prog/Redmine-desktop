@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage } from 'electron'
 import path from 'node:path'
-import { initUpdater, checkForUpdates } from './updater'
+import { initUpdater } from './updater'
 
 // The built directory structure
 //
@@ -207,15 +207,9 @@ app.whenReady().then(() => {
         createTray()
     }
 
-    // Initialize auto-updater
+    // Initialize auto-updater (自动检测由 updater.ts 处理)
     if (win) {
         initUpdater(win)
-        // Check for updates after a short delay (only in production)
-        if (!VITE_DEV_SERVER_URL) {
-            setTimeout(() => {
-                checkForUpdates()
-            }, 3000) // Wait 3 seconds after app start
-        }
     }
 })
 

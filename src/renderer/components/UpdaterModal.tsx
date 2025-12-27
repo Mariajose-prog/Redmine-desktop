@@ -14,6 +14,7 @@ const UpdaterModal: React.FC<UpdaterModalProps> = ({ isOpen, onClose, isDark }) 
     const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
     const [error, setError] = useState<UpdateError | null>(null);
     const [isDevMode, setIsDevMode] = useState(false);
+    const [isManualInstall, setIsManualInstall] = useState(false);
 
     // Get current app version
     useEffect(() => {
@@ -44,9 +45,12 @@ const UpdaterModal: React.FC<UpdaterModalProps> = ({ isOpen, onClose, isDark }) 
                 setStatus('downloading');
                 setDownloadProgress(progress);
             }),
-            window.updater.onUpdateDownloaded((info) => {
+            window.updater.onUpdateDownloaded((info: any) => {
                 setStatus('downloaded');
                 setUpdateInfo(info);
+                if (info?.manualInstall) {
+                    setIsManualInstall(true);
+                }
             }),
             window.updater.onUpdateError((err) => {
                 setStatus('error');
@@ -334,7 +338,7 @@ const UpdaterModal: React.FC<UpdaterModalProps> = ({ isOpen, onClose, isDark }) 
                                 更新已下载完成
                             </p>
                             <p style={{ color: isDark ? '#888' : '#666', fontSize: 13 }}>
-                                点击 "立即安装" 重启应用完成更新
+                                点击 "立即安装" 打开安装包并退出应用
                             </p>
                         </div>
                     )}

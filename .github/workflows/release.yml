@@ -62,7 +62,7 @@ jobs:
         run: npm ci
       
       - name: Build Electron app
-        run: npm run build -- --win --x64
+        run: npm run build -- --win --x64 --ia32
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
@@ -106,13 +106,43 @@ jobs:
           find artifacts -type f \( -name "*.dmg" -o -name "*.exe" -o -name "*.zip" -o -name "*.blockmap" -o -name "latest*.yml" \) -exec cp {} release-files/ \;
           ls -la release-files/
       
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          # 获取上一个 tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG=${{ github.ref_name }}
+          
+          echo "Previous tag: $PREV_TAG"
+          echo "Current tag: $CURRENT_TAG"
+          
+          # 生成 release notes
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s (%h)" ${PREV_TAG}..HEAD)
+          else
+            COMMITS=$(git log --pretty=format:"- %s (%h)" -10)
+          fi
+          
+          # 写入到文件
+          cat > release-notes.md << EOF
+          ## 更新内容
+          
+          $COMMITS
+          
+          ---
+          **完整更新日志**: [$PREV_TAG...$CURRENT_TAG](https://github.com/jheroy/Redmine-desktop/compare/${PREV_TAG}...${CURRENT_TAG})
+          EOF
+          
+          echo "Generated release notes:"
+          cat release-notes.md
+      
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body_path: release-notes.md
           files: release-files/*
           token: ${{ secrets.GITHUB_TOKEN }}
           fail_on_unmatched_files: true

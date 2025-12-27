@@ -1,6 +1,20 @@
 import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater';
 import { BrowserWindow, ipcMain, dialog, shell, app, net } from 'electron';
 import log from 'electron-log';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as https from 'https';
+import Store from 'electron-store';
+
+// 配置存储
+const store = new Store();
+
+// 保存最新版本信息
+let latestUpdateInfo: UpdateInfo | null = null;
+// 保存下载的 DMG 路径 (macOS)
+let downloadedDmgPath: string | null = null;
+// 后台检查定时器
+let autoCheckTimer: NodeJS.Timeout | null = null;
 
 // Configure logging
 log.transports.file.level = 'info';
@@ -16,12 +30,166 @@ let mainWindow: BrowserWindow | null = null;
 const isDev = !app.isPackaged;
 
 /**
+ * 下载文件到指定路径，支持重定向和进度回调
+ */
+function downloadFile(
+    url: string,
+    destPath: string,
+    onProgress: (progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void
+): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(destPath);
+        let downloadedBytes = 0;
+        let totalBytes = 0;
+        let startTime = Date.now();
+
+        const makeRequest = (requestUrl: string) => {
+            https.get(requestUrl, (response) => {
+                // 处理重定向
+                if (response.statusCode === 301 || response.statusCode === 302) {
+                    const redirectUrl = response.headers.location;
+                    if (redirectUrl) {
+                        log.info(`Redirecting to: ${redirectUrl}`);
+                        makeRequest(redirectUrl);
+                        return;
+                    }
+                }
+
+                if (response.statusCode !== 200) {
+                    file.close();
+                    fs.unlink(destPath, () => { });
+                    reject(new Error(`Download failed: HTTP ${response.statusCode}`));
+                    return;
+                }
+
+                totalBytes = parseInt(response.headers['content-length'] || '0', 10);
+
+                response.on('data', (chunk: Buffer) => {
+                    downloadedBytes += chunk.length;
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    const bytesPerSecond = elapsed > 0 ? downloadedBytes / elapsed : 0;
+                    const percent = totalBytes > 0 ? (downloadedBytes / totalBytes) * 100 : 0;
+
+                    onProgress({
+                        percent,
+                        bytesPerSecond,
+                        transferred: downloadedBytes,
+                        total: totalBytes
+                    });
+                });
+
+                response.pipe(file);
+
+                file.on('finish', () => {
+                    file.close();
+                    resolve();
+                });
+
+                file.on('error', (err) => {
+                    file.close();
+                    fs.unlink(destPath, () => { });
+                    reject(err);
+                });
+
+            }).on('error', (err) => {
+                file.close();
+                fs.unlink(destPath, () => { });
+                reject(err);
+            });
+        };
+
+        makeRequest(url);
+    });
+}
+
+/**
  * Initialize the auto-updater with the main window reference
  */
 export function initUpdater(win: BrowserWindow) {
     mainWindow = win;
     setupAutoUpdaterEvents();
     setupIpcHandlers();
+
+    // 启动自动检测
+    startAutoCheck();
+}
+
+/**
+ * 获取自动检测设置
+ */
+function getAutoCheckSettings(): { enabled: boolean; interval: number } {
+    return {
+        enabled: store.get('autoCheckUpdate', true) as boolean,
+        interval: store.get('autoCheckInterval', 24) as number  // 默认 24 小时
+    };
+}
+
+/**
+ * 启动后台自动检测
+ */
+let initialCheckTimeout: NodeJS.Timeout | null = null;
+let isFirstStart = true;  // 标记是否是首次启动
+
+function startAutoCheck() {
+    // 先清除所有之前的定时器
+    if (autoCheckTimer) {
+        clearInterval(autoCheckTimer);
+        autoCheckTimer = null;
+    }
+    if (initialCheckTimeout) {
+        clearTimeout(initialCheckTimeout);
+        initialCheckTimeout = null;
+    }
+
+    const settings = getAutoCheckSettings();
+
+    if (!settings.enabled || isDev) {
+        log.info('Auto update check disabled or in dev mode');
+        return;
+    }
+
+    const intervalMs = settings.interval * 60 * 60 * 1000; // 转换为毫秒
+    log.info(`Auto update check enabled, interval: ${settings.interval} hours (${intervalMs}ms)`);
+
+    // 启动定时检测
+    autoCheckTimer = setInterval(() => {
+        log.info('Background auto check for updates...');
+        silentCheckForUpdates();
+    }, intervalMs);
+
+    // 只在首次启动时延迟检测一次
+    if (isFirstStart) {
+        isFirstStart = false;
+        initialCheckTimeout = setTimeout(() => {
+            log.info('Initial auto check for updates...');
+            silentCheckForUpdates();
+            initialCheckTimeout = null;
+        }, 10000); // 启动后 10 秒
+    }
+}
+
+/**
+ * 静默检测更新（不弹窗，只在有更新时通知）
+ */
+async function silentCheckForUpdates() {
+    try {
+        if (isDev) return;
+
+        const result = await autoUpdater.checkForUpdates();
+        if (result && result.updateInfo) {
+            const currentVersion = app.getVersion();
+            if (result.updateInfo.version !== currentVersion) {
+                log.info(`Silent check found update: ${result.updateInfo.version}`);
+                // 发送通知到渲染进程
+                sendToRenderer('update-available-silent', {
+                    version: result.updateInfo.version,
+                    releaseDate: result.updateInfo.releaseDate
+                });
+            }
+        }
+    } catch (error) {
+        log.error('Silent update check error:', error);
+    }
 }
 
 /**
@@ -46,6 +214,7 @@ function setupAutoUpdaterEvents() {
     // Update available
     autoUpdater.on('update-available', (info: UpdateInfo) => {
         log.info('Update available:', info.version);
+        latestUpdateInfo = info;  // 保存版本信息
         sendToRenderer('update-available', {
             version: info.version,
             releaseDate: info.releaseDate,
@@ -242,6 +411,39 @@ function setupIpcHandlers() {
                 return { success: false, error: 'Dev mode - opened releases page' };
             }
 
+            // macOS: 自动下载 DMG 文件并打开
+            if (process.platform === 'darwin' && latestUpdateInfo) {
+                const version = latestUpdateInfo.version;
+                const dmgFileName = `Redmine-${version}-arm64.dmg`;
+                const downloadUrl = `https://github.com/jheroy/Redmine-desktop/releases/download/v${version}/${dmgFileName}`;
+                const downloadPath = path.join(app.getPath('downloads'), dmgFileName);
+
+                log.info(`macOS: Downloading DMG from ${downloadUrl}`);
+                sendToRenderer('download-progress', { percent: 0, bytesPerSecond: 0, transferred: 0, total: 0 });
+
+                try {
+                    await downloadFile(downloadUrl, downloadPath, (progress) => {
+                        sendToRenderer('download-progress', progress);
+                    });
+
+                    log.info(`DMG downloaded to ${downloadPath}`);
+                    downloadedDmgPath = downloadPath;  // 保存路径
+                    sendToRenderer('update-downloaded', {
+                        version: version,
+                        dmgPath: downloadPath
+                    });
+                    return { success: true, dmgPath: downloadPath };
+                } catch (downloadError: any) {
+                    log.error('Failed to download DMG:', downloadError);
+                    // 下载失败时打开 releases 页面
+                    await shell.openExternal('https://github.com/jheroy/Redmine-desktop/releases/latest');
+                    sendToRenderer('update-error', {
+                        message: `下载失败，已打开下载页面: ${downloadError.message}`
+                    });
+                    return { success: false, error: downloadError.message };
+                }
+            }
+
             log.info('Starting update download...');
             await autoUpdater.downloadUpdate();
             return { success: true };
@@ -263,17 +465,35 @@ function setupIpcHandlers() {
                 return { success: false, error: 'Cannot install in dev mode' };
             }
 
+            // macOS: 打开下载的 DMG 文件并退出应用
+            if (process.platform === 'darwin' && downloadedDmgPath) {
+                log.info(`Opening DMG: ${downloadedDmgPath}`);
+
+                // 打开 DMG 文件
+                shell.openPath(downloadedDmgPath).then((error) => {
+                    if (error) {
+                        log.error('Failed to open DMG:', error);
+                    }
+                });
+
+                // 延迟后退出应用，给用户时间看到 DMG 打开
+                setTimeout(() => {
+                    log.info('Quitting app for manual update...');
+                    app.quit();
+                }, 1500);
+
+                return { success: true };
+            }
+
             log.info('Installing update and restarting...');
 
-            // 延迟执行以确保 IPC 响应返回
+            // Windows: 使用 quitAndInstall
             setTimeout(() => {
                 log.info('Calling quitAndInstall...');
                 try {
-                    // 设置 autoUpdater 在退出时自动安装
                     autoUpdater.quitAndInstall(false, true);
                 } catch (e) {
                     log.error('quitAndInstall error:', e);
-                    // 如果 quitAndInstall 失败，强制退出
                     app.quit();
                 }
             }, 500);
@@ -305,6 +525,26 @@ function setupIpcHandlers() {
                 error: error.message
             };
         }
+    });
+
+    // 获取自动更新设置
+    ipcMain.handle('get-auto-update-settings', () => {
+        return getAutoCheckSettings();
+    });
+
+    // 设置自动更新配置
+    ipcMain.handle('set-auto-update-settings', (_, settings: { enabled?: boolean; interval?: number }) => {
+        if (settings.enabled !== undefined) {
+            store.set('autoCheckUpdate', settings.enabled);
+        }
+        if (settings.interval !== undefined) {
+            store.set('autoCheckInterval', settings.interval);
+        }
+
+        // 重新启动自动检测
+        startAutoCheck();
+
+        return getAutoCheckSettings();
     });
 }
 

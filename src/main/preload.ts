@@ -70,4 +70,18 @@ contextBridge.exposeInMainWorld('updater', {
         ipcRenderer.on('update-error', handler)
         return () => ipcRenderer.off('update-error', handler)
     },
+
+    // 静默更新通知（后台检测到更新时）
+    onUpdateAvailableSilent: (callback: (info: any) => void) => {
+        const handler = (_: any, info: any) => callback(info)
+        ipcRenderer.on('update-available-silent', handler)
+        return () => ipcRenderer.off('update-available-silent', handler)
+    },
+
+    // 获取自动更新设置
+    getAutoUpdateSettings: () => ipcRenderer.invoke('get-auto-update-settings'),
+
+    // 设置自动更新配置
+    setAutoUpdateSettings: (settings: { enabled?: boolean; interval?: number }) =>
+        ipcRenderer.invoke('set-auto-update-settings', settings),
 })
