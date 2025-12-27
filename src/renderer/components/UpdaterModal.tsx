@@ -68,7 +68,25 @@ const UpdaterModal: React.FC<UpdaterModalProps> = ({ isOpen, onClose, isDark }) 
         setError(null);
         setUpdateInfo(null);
         setDownloadProgress(null);
-        await window.updater?.checkForUpdates();
+        try {
+            const result = await window.updater?.checkForUpdates();
+            // 如果没有通过事件更新状态，手动处理返回结果
+            if (result?.updateInfo && result.updateInfo.version) {
+                // 检查是否有新版本
+                const currentVersion = await window.updater?.getAppVersion();
+                if (result.updateInfo.version !== currentVersion) {
+                    setStatus('available');
+                    setUpdateInfo(result.updateInfo);
+                } else {
+                    setStatus('not-available');
+                    setUpdateInfo(result.updateInfo);
+                }
+            }
+        } catch (e) {
+            console.error('Check for updates failed:', e);
+            setStatus('error');
+            setError({ message: String(e) });
+        }
     }, []);
 
     const handleDownloadUpdate = useCallback(async () => {
@@ -108,17 +126,27 @@ const UpdaterModal: React.FC<UpdaterModalProps> = ({ isOpen, onClose, isDark }) 
         } else {
             text = notes.map(n => `${n.version}: ${n.note}`).join('\n');
         }
-        // 移除 HTML 标签
-        text = text.replace(/<[^>]*>/g, '');
         // 解码 HTML 实体
         text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
-        // 清理多余空白
-        text = text.replace(/\s+/g, ' ').trim();
-        // 如果内容太长，截断
-        if (text.length > 200) {
-            text = text.substring(0, 200) + '...';
-        }
+        // 为链接添加样式并修改为使用 data-href，阻止默认行为
+        // 匹配所有 <a href="..." 或 <a href='...' 格式
+        text = text.replace(/<a\s+href=["']([^"']+)["']/gi, (match, url) => {
+            return `<a data-href="${url}" href="#" style="color: ${isDark ? '#60a5fa' : '#2563eb'}; text-decoration: underline; cursor: pointer;"`;
+        });
         return text || '查看发布页了解详情';
+    };
+
+    // 处理链接点击
+    const handleLinkClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'A') {
+            e.preventDefault();
+            e.stopPropagation();
+            const href = target.getAttribute('data-href');
+            if (href) {
+                (window as any).ipcRenderer?.send('open-external', href);
+            }
+        }
     };
 
     if (!isOpen) return null;
@@ -295,18 +323,20 @@ const UpdaterModal: React.FC<UpdaterModalProps> = ({ isOpen, onClose, isDark }) 
                                 </div>
                             </div>
                             {updateInfo.releaseNotes && (
-                                <div style={{
-                                    backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.05)',
-                                    borderRadius: 8,
-                                    padding: 12,
-                                    maxHeight: 120,
-                                    overflow: 'auto',
-                                    fontSize: 13,
-                                    color: isDark ? '#aaa' : '#555',
-                                    whiteSpace: 'pre-wrap',
-                                }}>
-                                    {formatReleaseNotes(updateInfo.releaseNotes)}
-                                </div>
+                                <div
+                                    onClick={handleLinkClick}
+                                    style={{
+                                        backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.05)',
+                                        borderRadius: 8,
+                                        padding: 12,
+                                        maxHeight: 150,
+                                        overflow: 'auto',
+                                        fontSize: 13,
+                                        color: isDark ? '#aaa' : '#555',
+                                    }}
+                                    className="release-notes-content"
+                                    dangerouslySetInnerHTML={{ __html: formatReleaseNotes(updateInfo.releaseNotes) }}
+                                />
                             )}
                         </div>
                     )}

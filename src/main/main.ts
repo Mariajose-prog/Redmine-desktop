@@ -181,6 +181,23 @@ function createWindow() {
         console.log('Loading local file:', indexPath)
         win.loadFile(indexPath)
     }
+
+    // 拦截导航，外部链接在系统浏览器打开
+    win.webContents.on('will-navigate', (event, url) => {
+        // 如果是外部链接（不是本地文件或开发服务器）
+        if (!url.startsWith('file://') && !url.startsWith('http://localhost')) {
+            event.preventDefault()
+            const { shell } = require('electron')
+            shell.openExternal(url)
+        }
+    })
+
+    // 处理新窗口打开请求
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        const { shell } = require('electron')
+        shell.openExternal(url)
+        return { action: 'deny' }
+    })
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common
