@@ -1859,7 +1859,32 @@ const App: React.FC = () => {
                         <div style={{ padding: '40px 30px 20px' }}>
                             {/* ID and actions row */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                                <span style={{ color: '#0c66ff', fontSize: 13 }}>#{selectedIssue.id}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <a
+                                        href={`${vm.redmineURL.replace(/\/$/, '')}/issues/${selectedIssue.id}`}
+                                        target="_blank"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            window.open(`${vm.redmineURL.replace(/\/$/, '')}/issues/${selectedIssue.id}`, '_blank');
+                                        }}
+                                        style={{ color: '#0c66ff', fontSize: 13, textDecoration: 'none', cursor: 'pointer' }}
+                                        title="在浏览器中打开"
+                                    >
+                                        #{selectedIssue.id}
+                                    </a>
+                                    <button
+                                        onClick={() => {
+                                            const url = `${vm.redmineURL.replace(/\/$/, '')}/issues/${selectedIssue.id}`;
+                                            navigator.clipboard.writeText(url);
+                                            // Optional: visual feedback could be added here
+                                        }}
+                                        title="复制链接"
+                                        className="icon-button"
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.6, padding: 2, display: 'flex', alignItems: 'center' }}
+                                    >
+                                        🔗
+                                    </button>
+                                </div>
                                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                                     <button
                                         onClick={() => setDeleteIssueConfirm(selectedIssue.id)}

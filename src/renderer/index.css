@@ -450,3 +450,13 @@ body {
     transform: rotate(360deg);
   }
 }
+
+.icon-button {
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.icon-button:hover {
+  background: rgba(128, 128, 128, 0.2) !important;
+  opacity: 1 !important;
+}
