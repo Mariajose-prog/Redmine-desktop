@@ -22,7 +22,7 @@ const MemoIssueItem = React.memo(({
     statusList,
     priorityList,
     versionList,
-    memberList,
+    groupedMembers,
     isFollowed,
     onToggleFollow
 }: {
@@ -36,7 +36,7 @@ const MemoIssueItem = React.memo(({
     statusList: any[],
     priorityList: any[],
     versionList: any[],
-    memberList: any[],
+    groupedMembers: { grouped: Record<string, { id: number; name: string }[]>, noGroup: { id: number; name: string }[], sortedGroups: string[] },
     isFollowed: boolean,
     onToggleFollow: (id: number) => void
 }) => {
@@ -90,21 +90,9 @@ const MemoIssueItem = React.memo(({
                             <select value={issue.assigned_to?.id || ''} onClick={e => e.stopPropagation()} onChange={e => onUpdateAssignee(issue.id, e.target.value)} style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}>
                                 <option value="">-</option>
                                 {(() => {
-                                    // Group members by their groups (roles)
-                                    const grouped: Record<string, { id: number; name: string }[]> = {};
-                                    const noGroup: { id: number; name: string }[] = [];
-                                    memberList.forEach((m: any) => {
-                                        if (m.groups && m.groups.length > 0) {
-                                            const group = m.groups[0];
-                                            if (!grouped[group]) grouped[group] = [];
-                                            grouped[group].push({ id: m.id, name: m.name });
-                                        } else {
-                                            noGroup.push({ id: m.id, name: m.name });
-                                        }
-                                    });
-                                    const sortedGroups = Object.keys(grouped).sort();
+                                    const { grouped, noGroup, sortedGroups } = groupedMembers;
                                     if (sortedGroups.length === 0) {
-                                        return memberList.map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>);
+                                        return noGroup.map((m: any) => <option key={m.id} value={m.id}>{m.name}</option>);
                                     }
                                     return (
                                         <>
@@ -170,7 +158,7 @@ const MemoIssueItem = React.memo(({
         prevProps.statusList === nextProps.statusList &&
         prevProps.priorityList === nextProps.priorityList &&
         prevProps.versionList === nextProps.versionList &&
-        prevProps.memberList === nextProps.memberList &&
+        prevProps.groupedMembers === nextProps.groupedMembers &&
         prevProps.isFollowed === nextProps.isFollowed
     );
 });
@@ -608,6 +596,9 @@ const App: React.FC = () => {
         });
         return cache;
     }, [vm.projectMembersMap]);
+
+    // Cache grouped members per project to avoid calculation during render
+
     // Get current project's member list or fall back to global
     const currentProjectMembers = useMemo(() => {
         if (vm.selectedProjectId && vm.selectedProjectId > 0) {
@@ -646,6 +637,17 @@ const App: React.FC = () => {
 
         return { grouped, noGroup, sortedGroups };
     }, []);
+
+    // Cache grouped members per project to avoid calculation during render
+    const stableGroupedMemberCache = useMemo(() => {
+        const cache: Record<string, any> = {};
+        Object.entries(stableMemberListCache).forEach(([k, v]) => {
+            cache[k] = groupMembersByRole(v);
+        });
+        // Also cache global list grouping
+        cache['global'] = groupMembersByRole(stableMemberList);
+        return cache;
+    }, [stableMemberListCache, stableMemberList, groupMembersByRole]);
 
     // Render grouped member options with optgroup
     const renderGroupedMemberOptions = useCallback((members: { id: number; name: string; groups?: string[] }[], excludeIds?: number[]) => {
@@ -1806,7 +1808,7 @@ const App: React.FC = () => {
                                             statusList={stableStatusList}
                                             priorityList={stablePriorityList}
                                             versionList={stableVersionListCache[i.project?.id || -1] || []}
-                                            memberList={stableMemberListCache[i.project?.id || -1] || stableMemberList}
+                                            groupedMembers={stableGroupedMemberCache[i.project?.id || -1] || stableGroupedMemberCache['global']}
                                             isFollowed={vm.followedIssueIds.has(i.id)}
                                             onToggleFollow={async (id) => {
                                                 const followed = vm.followedIssueIds.has(id);
