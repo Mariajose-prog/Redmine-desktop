@@ -33,11 +33,11 @@
   /* Darker for better readability */
   --accent-color: #6750a4;
   /* M3 Purple */
-  --input-bg: rgba(255, 255, 255, 0.6);
-  --input-border: rgba(0, 0, 0, 0.1);
+  --input-bg: rgba(0, 0, 0, 0.05);
+  --input-border: rgba(0, 0, 0, 0.08);
   --modal-bg: #ffffff;
   --button-secondary: rgba(0, 0, 0, 0.05);
-  --editor-bg: rgba(255, 255, 255, 0.7);
+  --editor-bg: rgba(0, 0, 0, 0.08);
   --editor-border: rgba(0, 0, 0, 0.05);
 }
 

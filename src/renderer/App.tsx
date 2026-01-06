@@ -179,7 +179,7 @@ const NoteEditor: React.FC<{ issueId: number, onAddNote: (id: number, text: stri
             // Reset textarea size after sending
             if (textareaRef.current) {
                 textareaRef.current.style.height = '36px';
-                textareaRef.current.style.background = 'rgba(255,255,255,0.05)';
+                textareaRef.current.style.background = 'var(--input-bg)';
                 textareaRef.current.blur();
             }
         }
@@ -197,20 +197,22 @@ const NoteEditor: React.FC<{ issueId: number, onAddNote: (id: number, text: stri
                         if (e.key === 'Enter' && e.shiftKey) {
                             e.preventDefault();
                             handleSend();
+                        } else if (e.key === 'Escape') {
+                            e.currentTarget.blur();
                         }
                     }}
                     placeholder="Add a note... (Shift + Enter to send)"
-                    style={{ width: '100%', height: 36, display: 'block', background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 8, padding: '9px 50px 9px 15px', color: 'var(--text-primary)', resize: 'none', fontSize: 13, transition: 'all 0.2s', outline: 'none' }}
+                    style={{ width: '100%', height: 36, display: 'block', background: 'var(--input-bg)', border: 'none', borderRadius: 8, padding: '9px 50px 9px 15px', color: 'var(--text-primary)', resize: 'none', fontSize: 13, transition: 'all 0.2s', outline: 'none' }}
                     onFocus={e => {
                         (e.target as any).style.height = '100px';
-                        (e.target as any).style.background = 'rgba(0,0,0,0.7)';
+                        (e.target as any).style.background = 'var(--editor-bg)';
                         (e.target as any).style.backdropFilter = 'blur(50px)';
                     }}
                     onBlur={e => {
                         if (!noteText) {
                             (e.target as any).style.height = '36px';
                         }
-                        (e.target as any).style.background = 'rgba(255,255,255,0.05)';
+                        (e.target as any).style.background = 'var(--input-bg)';
                         (e.target as any).style.backdropFilter = 'none';
                     }}
                 />
@@ -1773,7 +1775,7 @@ const App: React.FC = () => {
                     <div
                         className="sidebar-item"
                         onClick={() => setShowSettings(true)}
-                        style={{ margin: 0, padding: 0, flex: 1, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: 8, fontSize: 13 }}
+                        style={{ margin: 0, padding: 0, flex: 1, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--input-bg)', borderRadius: 8, fontSize: 13 }}
                     >
                         ⚙️ Settings
                     </div>
@@ -2028,7 +2030,7 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="add-task-bar pane-footer">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: '0 12px', flex: 1, height: 36 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--input-bg)', borderRadius: 8, padding: '0 12px', flex: 1, height: 36 }}>
                         <span style={{ color: '#0c66ff', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>+</span>
                         <input type="text" placeholder="快速添加任务..." value={newTaskSubject} onChange={e => setNewTaskSubject(e.target.value)} onKeyDown={e => {
                             if (e.key === 'Enter' && newTaskSubject.trim() && vm.selectedProjectId !== -1) {
@@ -2293,7 +2295,7 @@ const App: React.FC = () => {
                                 return assignedWatchersWithNames.length > 0 && (
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
                                         {assignedWatchersWithNames.map(w => (
-                                            <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12, fontSize: 11, color: 'var(--text-secondary)' }}>
+                                            <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--input-bg)', padding: '2px 8px', borderRadius: 12, fontSize: 11, color: 'var(--text-secondary)' }}>
                                                 <span>{w.name}</span>
                                                 <span
                                                     onClick={() => vm.removeAssignedWatcher(selectedIssue, w.id)}
