@@ -286,9 +286,10 @@ export function useAppViewModel() {
             // Use cached currentUser instead of fetching again
             if (currentUser) {
                 let followedIds = new Set<number>();
-                let followedIssuesList: Issue[] = [];
+                let followedAndAssignedIssuesList: Issue[] = [];
                 let offset = 0;
                 const limit = 100;
+
                 while (true) {
                     const { issues, total_count } = await service.fetchIssues({
                         watcher_id: currentUser.id,
@@ -298,11 +299,31 @@ export function useAppViewModel() {
                     });
                     issues.forEach(i => {
                         followedIds.add(i.id);
-                        followedIssuesList.push(i);
+                        followedAndAssignedIssuesList.push(i);
                     });
                     if (followedIds.size >= total_count || issues.length < limit) break;
                     offset += limit;
                 }
+
+                // 同时获取指派给我的任务，确保它们在被删除或移动时能被正确同步
+                // 特别是那些没有固定版本的任务
+                offset = 0;
+                while (true) {
+                    const { issues, total_count } = await service.fetchIssues({
+                        assigned_to_id: currentUser.id,
+                        status_id: '*',
+                        limit,
+                        offset
+                    });
+                    issues.forEach(i => {
+                        if (!followedIds.has(i.id)) {
+                            followedAndAssignedIssuesList.push(i);
+                        }
+                    });
+                    if (offset + issues.length >= total_count || issues.length < limit) break;
+                    offset += limit;
+                }
+
                 setFollowedIssueIds(followedIds);
                 // Save followed issue IDs to cache
                 try {
@@ -310,11 +331,30 @@ export function useAppViewModel() {
                 } catch (e) {
                     console.warn('Failed to cache followed IDs:', e);
                 }
-                // Merge followed issues into allIssues (some might not be in active versions)
+
+                // 合并关注和指派的任务到 allIssues，并清理已失效的缓存
                 setAllIssues(prev => {
+                    const refreshedVersionIds = new Set(activeVersionIds);
+                    const refreshedFollowedAndAssignedIds = new Set(followedAndAssignedIssuesList.map(i => i.id));
                     const issueMap = new Map(prev.map(i => [i.id, i]));
                     let changed = false;
-                    followedIssuesList.forEach(fi => {
+
+                    // 清理逻辑：如果一个 Issue 原本是“关注”或“指派”状态，但现在不在远程返回的列表中，
+                    // 且它也不属于任何当前活跃的版本，说明它已被删除或不再相关，应从缓存移除。
+                    for (const issue of prev) {
+                        const wasFollowed = followedIssueIds.has(issue.id);
+                        const wasAssigned = issue.assigned_to?.id === currentUser.id;
+
+                        if ((wasFollowed || wasAssigned) && !refreshedFollowedAndAssignedIds.has(issue.id)) {
+                            const isInActiveVersion = issue.fixed_version?.id && refreshedVersionIds.has(issue.fixed_version.id);
+                            if (!isInActiveVersion) {
+                                issueMap.delete(issue.id);
+                                changed = true;
+                            }
+                        }
+                    }
+
+                    followedAndAssignedIssuesList.forEach(fi => {
                         const existing = issueMap.get(fi.id);
                         if (!existing) {
                             issueMap.set(fi.id, fi);
@@ -350,7 +390,7 @@ export function useAppViewModel() {
             isRefreshingRef.current = false;
             setIsBackgroundRefreshing(false);
         }
-    }, [service, currentUser, activeVersionIds]); // Badge updates handled by reactive useEffect
+    }, [service, currentUser, activeVersionIds, followedIssueIds]); // 增加 followedIssueIds 依赖以确保清理逻辑准确
 
     // Fetch issues for a specific version (for Others section)
     const fetchVersionIssues = useCallback(async (versionId: number) => {
