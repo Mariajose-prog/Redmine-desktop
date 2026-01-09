@@ -42,11 +42,21 @@ const MemoIssueItem = React.memo(({
 }) => {
     return (
         <div className={`issue-item ${isSelected ? 'selected' : ''}`} data-issue-id={issue.id} onClick={() => onSelect(issue.id)} style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
-            <div className="issue-icon-circle" style={{
-                borderColor: issue.status.name.includes('开发完成') ? '#30d158' : issue.status.name.includes('验证完成') ? 'var(--text-secondary)' : '#ff453a',
-                width: 18, height: 18, fontSize: 9, flexShrink: 0,
-                color: issue.status.name.includes('开发完成') ? '#30d158' : issue.status.name.includes('验证完成') ? 'var(--text-secondary)' : '#ff453a'
-            }}>
+            <div className="issue-icon-circle"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (issue.status.name.includes('开发完成') || issue.status.name.includes('验证完成')) return;
+                    const doneStatus = statusList.find(s => s.name.includes('开发完成'));
+                    if (doneStatus) {
+                        onUpdateStatus(issue.id, doneStatus.id);
+                    }
+                }}
+                style={{
+                    borderColor: issue.status.name.includes('开发完成') ? '#30d158' : issue.status.name.includes('验证完成') ? 'var(--text-secondary)' : '#ff453a',
+                    width: 18, height: 18, fontSize: 9, flexShrink: 0,
+                    color: issue.status.name.includes('开发完成') ? '#30d158' : issue.status.name.includes('验证完成') ? 'var(--text-secondary)' : '#ff453a',
+                    cursor: (issue.status.name.includes('开发完成') || issue.status.name.includes('验证完成')) ? 'default' : 'pointer'
+                }}>
                 {(issue.status.name.includes('开发完成') || issue.status.name.includes('验证完成')) ? '✓' : ''}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
